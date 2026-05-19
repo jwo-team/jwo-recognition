@@ -38,7 +38,7 @@ class DataStore {
     async save() {
         try {
             await fetch(NPOINT_URL, {
-                method: 'POST',
+                method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(this.data)
             });
