@@ -1,4 +1,7 @@
 // ===== JWO Team Recognition App =====
+// Shared database: https://api.npoint.io/8055ba6f3970bd5abb93
+
+const NPOINT_URL = 'https://api.npoint.io/8055ba6f3970bd5abb93';
 
 // Default team behaviors
 const DEFAULT_VALUES = [
@@ -7,73 +10,94 @@ const DEFAULT_VALUES = [
     { id: 'persist-through-no', name: 'Persist Through "No" and Build the Case for "Yes"', emoji: '💪' }
 ];
 
-// ===== Data Store =====
+// ===== Cloud Data Store =====
 class DataStore {
     constructor() {
-        this.init();
+        this.data = { nominations: [], newsletters: [], values: [] };
+        this.loaded = false;
     }
 
-    init() {
-        // Reset values if app version changed or first run
-        const currentVersion = '2.0';
-        if (localStorage.getItem('jwo_version') !== currentVersion) {
-            localStorage.setItem('jwo_values', JSON.stringify(DEFAULT_VALUES));
-            localStorage.setItem('jwo_version', currentVersion);
+    async load() {
+        try {
+            const response = await fetch(NPOINT_URL);
+            this.data = await response.json();
+            if (!this.data.nominations) this.data.nominations = [];
+            if (!this.data.newsletters) this.data.newsletters = [];
+            if (!this.data.values || this.data.values.length === 0) {
+                this.data.values = DEFAULT_VALUES;
+                await this.save();
+            }
+            this.loaded = true;
+        } catch (err) {
+            console.error('Failed to load data:', err);
+            this.data = { nominations: [], newsletters: [], values: DEFAULT_VALUES };
+            this.loaded = true;
         }
-        if (!localStorage.getItem('jwo_initialized')) {
-            localStorage.setItem('jwo_nominations', JSON.stringify([]));
-            localStorage.setItem('jwo_newsletters', JSON.stringify([]));
-            localStorage.setItem('jwo_initialized', 'true');
+    }
+
+    async save() {
+        try {
+            await fetch(NPOINT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(this.data)
+            });
+        } catch (err) {
+            console.error('Failed to save data:', err);
+            showToast('Error saving — please try again', 'error');
         }
     }
 
     getValues() {
-        return JSON.parse(localStorage.getItem('jwo_values') || '[]');
+        return this.data.values || [];
     }
 
     setValues(values) {
-        localStorage.setItem('jwo_values', JSON.stringify(values));
+        this.data.values = values;
+        this.save();
     }
 
     getNominations() {
-        return JSON.parse(localStorage.getItem('jwo_nominations') || '[]');
+        return this.data.nominations || [];
     }
 
-    addNomination(nomination) {
-        const nominations = this.getNominations();
+    async addNomination(nomination) {
         nomination.id = Date.now().toString();
         nomination.timestamp = new Date().toISOString();
-        nominations.push(nomination);
-        localStorage.setItem('jwo_nominations', JSON.stringify(nominations));
+        this.data.nominations.push(nomination);
+        await this.save();
         return nomination;
     }
 
-    getNewsletters() {
-        return JSON.parse(localStorage.getItem('jwo_newsletters') || '[]');
+    async deleteNomination(id) {
+        this.data.nominations = this.data.nominations.filter(n => n.id !== id);
+        await this.save();
     }
 
-    addNewsletter(newsletter) {
-        const newsletters = this.getNewsletters();
+    getNewsletters() {
+        return this.data.newsletters || [];
+    }
+
+    async addNewsletter(newsletter) {
         newsletter.id = Date.now().toString();
         newsletter.savedAt = new Date().toISOString();
-        newsletters.push(newsletter);
-        localStorage.setItem('jwo_newsletters', JSON.stringify(newsletters));
+        this.data.newsletters.push(newsletter);
+        await this.save();
         return newsletter;
     }
 
     exportAll() {
         return {
-            values: this.getValues(),
-            nominations: this.getNominations(),
-            newsletters: this.getNewsletters(),
+            ...this.data,
             exportedAt: new Date().toISOString()
         };
     }
 
-    importAll(data) {
-        if (data.values) localStorage.setItem('jwo_values', JSON.stringify(data.values));
-        if (data.nominations) localStorage.setItem('jwo_nominations', JSON.stringify(data.nominations));
-        if (data.newsletters) localStorage.setItem('jwo_newsletters', JSON.stringify(data.newsletters));
+    async importAll(data) {
+        if (data.values) this.data.values = data.values;
+        if (data.nominations) this.data.nominations = data.nominations;
+        if (data.newsletters) this.data.newsletters = data.newsletters;
+        await this.save();
     }
 }
 
@@ -95,7 +119,6 @@ class Fireworks {
 
     launch() {
         this.animating = true;
-        // Create multiple bursts across the screen
         const burstCount = 8;
         for (let i = 0; i < burstCount; i++) {
             setTimeout(() => {
@@ -106,31 +129,22 @@ class Fireworks {
             }, i * 200);
         }
         this.animate();
-
-        // Stop after 3 seconds
-        setTimeout(() => {
-            this.animating = false;
-        }, 3000);
+        setTimeout(() => { this.animating = false; }, 3000);
     }
 
     createBurst(x, y) {
         const colors = ['#FF9900', '#FFB84D', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96E6A1', '#DDA0DD', '#F7DC6F'];
         const particleCount = 40;
-
         for (let i = 0; i < particleCount; i++) {
             const angle = (Math.PI * 2 * i) / particleCount;
             const speed = 2 + Math.random() * 4;
             const size = 2 + Math.random() * 3;
-
             this.particles.push({
-                x,
-                y,
+                x, y,
                 vx: Math.cos(angle) * speed,
                 vy: Math.sin(angle) * speed,
-                size,
-                color: colors[Math.floor(Math.random() * colors.length)],
-                alpha: 1,
-                decay: 0.015 + Math.random() * 0.01,
+                size, color: colors[Math.floor(Math.random() * colors.length)],
+                alpha: 1, decay: 0.015 + Math.random() * 0.01,
                 gravity: 0.05,
                 shape: Math.random() > 0.5 ? 'circle' : 'star'
             });
@@ -139,34 +153,18 @@ class Fireworks {
 
     animate() {
         if (!this.animating && this.particles.length === 0) return;
-
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
         this.particles = this.particles.filter(p => {
-            p.x += p.vx;
-            p.y += p.vy;
-            p.vy += p.gravity;
-            p.vx *= 0.99;
-            p.alpha -= p.decay;
-
+            p.x += p.vx; p.y += p.vy; p.vy += p.gravity; p.vx *= 0.99; p.alpha -= p.decay;
             if (p.alpha <= 0) return false;
-
             this.ctx.save();
             this.ctx.globalAlpha = p.alpha;
             this.ctx.fillStyle = p.color;
-
-            if (p.shape === 'star') {
-                this.drawStar(p.x, p.y, p.size);
-            } else {
-                this.ctx.beginPath();
-                this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-                this.ctx.fill();
-            }
-
+            if (p.shape === 'star') { this.drawStar(p.x, p.y, p.size); }
+            else { this.ctx.beginPath(); this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); this.ctx.fill(); }
             this.ctx.restore();
             return true;
         });
-
         requestAnimationFrame(() => this.animate());
     }
 
@@ -175,10 +173,7 @@ class Fireworks {
         for (let i = 0; i < 5; i++) {
             const angle = (i * 4 * Math.PI) / 5 - Math.PI / 2;
             const method = i === 0 ? 'moveTo' : 'lineTo';
-            this.ctx[method](
-                x + Math.cos(angle) * size,
-                y + Math.sin(angle) * size
-            );
+            this.ctx[method](x + Math.cos(angle) * size, y + Math.sin(angle) * size);
         }
         this.ctx.closePath();
         this.ctx.fill();
@@ -194,19 +189,11 @@ function getWeekRange(date = new Date()) {
     monday.setHours(0, 0, 0, 0);
     const sunday = new Date(monday);
     sunday.setDate(monday.getDate() + 6);
-    return {
-        start: monday,
-        end: sunday,
-        label: `${formatDate(monday)} - ${formatDate(sunday)}`
-    };
+    return { start: monday, end: sunday, label: `${formatDate(monday)} - ${formatDate(sunday)}` };
 }
 
 function formatDate(date) {
-    return new Date(date).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric'
-    });
+    return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function getNominationsForWeek(nominations, weekStart) {
@@ -214,7 +201,6 @@ function getNominationsForWeek(nominations, weekStart) {
     start.setHours(0, 0, 0, 0);
     const end = new Date(start);
     end.setDate(end.getDate() + 7);
-
     return nominations.filter(n => {
         const nDate = new Date(n.timestamp);
         return nDate >= start && nDate < end;
@@ -227,30 +213,21 @@ function getAvailableWeeks(nominations) {
         const date = new Date(n.timestamp);
         const weekRange = getWeekRange(date);
         const key = weekRange.start.toISOString().split('T')[0];
-        if (!weeks.has(key)) {
-            weeks.set(key, weekRange.label);
-        }
+        if (!weeks.has(key)) weeks.set(key, weekRange.label);
     });
-
-    // Always include current week
     const currentWeek = getWeekRange();
     const currentKey = currentWeek.start.toISOString().split('T')[0];
-    if (!weeks.has(currentKey)) {
-        weeks.set(currentKey, currentWeek.label);
-    }
-
+    if (!weeks.has(currentKey)) weeks.set(currentKey, currentWeek.label);
     return Array.from(weeks.entries()).sort((a, b) => b[0].localeCompare(a[0]));
 }
 
 function showToast(message, type = 'success') {
     const existing = document.querySelector('.toast');
     if (existing) existing.remove();
-
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.textContent = message;
     document.body.appendChild(toast);
-
     setTimeout(() => toast.remove(), 3000);
 }
 
@@ -262,108 +239,59 @@ class App {
         this.selectedValue = null;
         this.fireworks = new Fireworks(document.getElementById('fireworks-canvas'));
         this.draftTimer = null;
-        this.bindEvents();
-        this.checkSession();
+        this.init();
     }
 
-    checkSession() {
+    async init() {
+        this.bindEvents();
         const session = sessionStorage.getItem('jwo_session');
         if (session) {
             this.currentUser = session;
+            await this.store.load();
             this.showApp();
         }
     }
 
     bindEvents() {
-        // Login
         document.getElementById('login-form').addEventListener('submit', (e) => {
             e.preventDefault();
             this.handleLogin();
         });
-
-        // Logout
-        document.getElementById('logout-btn').addEventListener('click', () => {
-            this.handleLogout();
-        });
-
-        // Navigation
+        document.getElementById('logout-btn').addEventListener('click', () => this.handleLogout());
         document.querySelectorAll('.nav-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                this.switchTab(btn.dataset.tab);
-            });
+            btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
         });
-
-        // Nomination form
         document.getElementById('nomination-form').addEventListener('submit', (e) => {
             e.preventDefault();
             this.handleNomination();
         });
-
-        // Auto-save draft on input
         ['nominee-name', 'nomination-reason', 'nomination-impact'].forEach(id => {
-            document.getElementById(id).addEventListener('input', () => {
-                this.autoSaveDraft();
-            });
+            document.getElementById(id).addEventListener('input', () => this.autoSaveDraft());
         });
+        document.getElementById('restore-draft-btn').addEventListener('click', () => this.restoreDraft());
+        document.getElementById('discard-draft-btn').addEventListener('click', () => this.discardDraft());
+        document.getElementById('generate-newsletter').addEventListener('click', () => this.generateNewsletter());
+        document.getElementById('copy-newsletter').addEventListener('click', () => this.copyNewsletter());
+        document.getElementById('save-newsletter').addEventListener('click', () => this.saveNewsletter());
+        document.getElementById('send-newsletter').addEventListener('click', () => this.sendNewsletter());
+        document.getElementById('generate-quarterly').addEventListener('click', () => this.generateQuarterly());
+        document.getElementById('copy-quarterly').addEventListener('click', () => this.copyQuarterly());
 
-        // Draft banner buttons
-        document.getElementById('restore-draft-btn').addEventListener('click', () => {
-            this.restoreDraft();
-        });
-        document.getElementById('discard-draft-btn').addEventListener('click', () => {
-            this.discardDraft();
-        });
-
-        // Newsletter
-        document.getElementById('generate-newsletter').addEventListener('click', () => {
-            this.generateNewsletter();
-        });
-        document.getElementById('copy-newsletter').addEventListener('click', () => {
-            this.copyNewsletter();
-        });
-        document.getElementById('save-newsletter').addEventListener('click', () => {
-            this.saveNewsletter();
-        });
-        document.getElementById('send-newsletter').addEventListener('click', () => {
-            this.sendNewsletter();
-        });
-
-        // Quarterly
-        document.getElementById('generate-quarterly').addEventListener('click', () => {
-            this.generateQuarterly();
-        });
-        document.getElementById('copy-quarterly').addEventListener('click', () => {
-            this.copyQuarterly();
-        });
-
-        // Archive tabs
         document.querySelectorAll('.archive-tab-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                this.switchArchiveTab(btn.dataset.archive);
-            });
+            btn.addEventListener('click', () => this.switchArchiveTab(btn.dataset.archive));
         });
-
-        // Settings
-        document.getElementById('add-value-btn').addEventListener('click', () => {
-            this.addValue();
-        });
-        document.getElementById('copy-link-btn').addEventListener('click', () => {
-            this.copyShareLink();
-        });
-        document.getElementById('export-data-btn').addEventListener('click', () => {
-            this.exportData();
-        });
-        document.getElementById('import-data-input').addEventListener('change', (e) => {
-            this.importData(e);
-        });
+        document.getElementById('add-value-btn').addEventListener('click', () => this.addValue());
+        document.getElementById('copy-link-btn').addEventListener('click', () => this.copyShareLink());
+        document.getElementById('export-data-btn').addEventListener('click', () => this.exportData());
+        document.getElementById('import-data-input').addEventListener('change', (e) => this.importData(e));
     }
 
-    handleLogin() {
+    async handleLogin() {
         const name = document.getElementById('login-name').value.trim();
         if (!name) return;
-
         this.currentUser = name;
         sessionStorage.setItem('jwo_session', name);
+        await this.store.load();
         this.showApp();
     }
 
@@ -393,15 +321,16 @@ class App {
     switchTab(tabId) {
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-
         document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
         document.getElementById(`tab-${tabId}`).classList.add('active');
-
-        if (tabId === 'current-week') this.renderCurrentWeek();
-        if (tabId === 'newsletter') this.renderNewsletterWeeks();
-        if (tabId === 'quarterly') this.renderQuarterlyOptions();
-        if (tabId === 'archive') this.renderArchive();
-        if (tabId === 'settings') this.renderSettings();
+        // Refresh data from cloud when switching tabs
+        this.store.load().then(() => {
+            if (tabId === 'current-week') this.renderCurrentWeek();
+            if (tabId === 'newsletter') this.renderNewsletterWeeks();
+            if (tabId === 'quarterly') this.renderQuarterlyOptions();
+            if (tabId === 'archive') this.renderArchive();
+            if (tabId === 'settings') this.renderSettings();
+        });
     }
 
     // ===== Nomination =====
@@ -415,7 +344,6 @@ class App {
                 <span class="value-text">${v.name}</span>
             </label>
         `).join('');
-
         grid.querySelectorAll('.value-option').forEach(opt => {
             opt.addEventListener('click', () => {
                 grid.querySelectorAll('.value-option').forEach(o => o.classList.remove('selected'));
@@ -426,7 +354,7 @@ class App {
         });
     }
 
-    handleNomination() {
+    async handleNomination() {
         const nominee = document.getElementById('nominee-name').value.trim();
         const nominator = document.getElementById('nominator-name').value.trim();
         const reason = document.getElementById('nomination-reason').value.trim();
@@ -440,25 +368,18 @@ class App {
         const values = this.store.getValues();
         const value = values.find(v => v.id === this.selectedValue);
 
-        this.store.addNomination({
-            nominee,
-            nominator,
-            value: value.name,
-            valueEmoji: value.emoji,
-            valueId: value.id,
-            reason,
-            impact
+        await this.store.addNomination({
+            nominee, nominator,
+            value: value.name, valueEmoji: value.emoji, valueId: value.id,
+            reason, impact
         });
 
-        // Launch fireworks!
         this.fireworks.launch();
         this.clearDraft();
 
-        // Show success
         document.getElementById('nomination-form').classList.add('hidden');
         document.getElementById('nomination-success').classList.remove('hidden');
 
-        // Reset after delay
         setTimeout(() => {
             document.getElementById('nomination-form').classList.remove('hidden');
             document.getElementById('nomination-success').classList.add('hidden');
@@ -474,10 +395,8 @@ class App {
     renderCurrentWeek() {
         const week = getWeekRange();
         document.getElementById('current-week-range').textContent = week.label;
-
         const nominations = this.store.getNominations();
         const weekNoms = getNominationsForWeek(nominations, week.start);
-
         const container = document.getElementById('current-nominations');
         const emptyState = document.getElementById('no-nominations');
 
@@ -486,24 +405,17 @@ class App {
             emptyState.classList.remove('hidden');
             return;
         }
-
         emptyState.classList.add('hidden');
         container.classList.remove('hidden');
         container.innerHTML = weekNoms.map(n => this.renderNominationCard(n, true)).join('');
-
-        // Bind delete buttons
         container.querySelectorAll('.delete-nomination-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                this.deleteNomination(btn.dataset.deleteId);
-            });
+            btn.addEventListener('click', () => this.deleteNomination(btn.dataset.deleteId));
         });
     }
 
-    deleteNomination(id) {
+    async deleteNomination(id) {
         if (!confirm('Are you sure you want to delete this nomination?')) return;
-
-        const nominations = this.store.getNominations().filter(n => n.id !== id);
-        localStorage.setItem('jwo_nominations', JSON.stringify(nominations));
+        await this.store.deleteNomination(id);
         this.renderCurrentWeek();
         showToast('Nomination deleted');
     }
@@ -530,29 +442,19 @@ class App {
         const select = document.getElementById('newsletter-week');
         const nominations = this.store.getNominations();
         const weeks = getAvailableWeeks(nominations);
-
-        select.innerHTML = weeks.map(([key, label]) => `
-            <option value="${key}">${label}</option>
-        `).join('');
+        select.innerHTML = weeks.map(([key, label]) => `<option value="${key}">${label}</option>`).join('');
     }
 
     generateNewsletter() {
         const weekKey = document.getElementById('newsletter-week').value;
-        if (!weekKey) {
-            showToast('Please select a week', 'error');
-            return;
-        }
-
+        if (!weekKey) { showToast('Please select a week', 'error'); return; }
         const nominations = this.store.getNominations();
         const weekNoms = getNominationsForWeek(nominations, weekKey);
         const weekRange = getWeekRange(new Date(weekKey));
-
         if (weekNoms.length === 0) {
-            document.getElementById('newsletter-preview').innerHTML =
-                '<p class="empty-state">No nominations found for this week.</p>';
+            document.getElementById('newsletter-preview').innerHTML = '<p class="empty-state">No nominations found for this week.</p>';
             return;
         }
-
         const newsletter = this.buildNewsletterContent(weekNoms, weekRange);
         document.getElementById('newsletter-preview').textContent = newsletter;
     }
@@ -566,84 +468,59 @@ class App {
         content += `Hello JWO Team! 👋\n\n`;
         content += `Here are this week's nominations celebrating team members\nwho are demonstrating key behaviors and driving our success forward:\n\n`;
         content += '──────────────────────────────────────────────────────\n\n';
-
         nominations.forEach((n, i) => {
             content += `${n.valueEmoji}  ${n.value.toUpperCase()}\n`;
             content += `    ⭐ ${n.nominee}\n`;
             content += `    Nominated by: ${n.nominator}\n\n`;
             content += `    "${n.reason}"\n`;
-            if (n.impact) {
-                content += `\n    Impact: ${n.impact}\n`;
-            }
-            if (i < nominations.length - 1) {
-                content += '\n──────────────────────────────────────────────────────\n\n';
-            }
+            if (n.impact) content += `\n    Impact: ${n.impact}\n`;
+            if (i < nominations.length - 1) content += '\n──────────────────────────────────────────────────────\n\n';
         });
-
         content += '\n\n══════════════════════════════════════════════════════\n\n';
         content += `Congrats to the nominees! 🎉\n\n`;
         content += 'Keep pushing limits, asking why, and searching for possibilities.\nDon\'t hesitate to reach out if you need support!\n\n';
         content += '— JWO Leadership Team 🚀\n';
-
         return content;
     }
 
     copyNewsletter() {
         const preview = document.getElementById('newsletter-preview');
         const text = preview.textContent;
-
         if (!text || text.includes('Select a week') || text.includes('No nominations')) {
-            showToast('Generate a newsletter first', 'error');
-            return;
+            showToast('Generate a newsletter first', 'error'); return;
         }
-
         navigator.clipboard.writeText(text).then(() => {
             showToast('📋 Copied! Paste into Outlook.');
         }).catch(() => {
-            const textarea = document.createElement('textarea');
-            textarea.value = text;
-            document.body.appendChild(textarea);
-            textarea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textarea);
+            const ta = document.createElement('textarea'); ta.value = text;
+            document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+            document.body.removeChild(ta);
             showToast('📋 Copied! Paste into Outlook.');
         });
     }
 
-    saveNewsletter() {
+    async saveNewsletter() {
         const preview = document.getElementById('newsletter-preview');
         const text = preview.textContent;
         const weekKey = document.getElementById('newsletter-week').value;
-
         if (!text || text.includes('Select a week') || text.includes('No nominations')) {
-            showToast('Generate a newsletter first', 'error');
-            return;
+            showToast('Generate a newsletter first', 'error'); return;
         }
-
         const weekRange = getWeekRange(new Date(weekKey));
-        this.store.addNewsletter({
-            weekKey,
-            weekLabel: weekRange.label,
-            content: text
-        });
-
+        await this.store.addNewsletter({ weekKey, weekLabel: weekRange.label, content: text });
         showToast('💾 Newsletter saved to archive!');
     }
 
     sendNewsletter() {
         const preview = document.getElementById('newsletter-preview');
         const text = preview.textContent;
-
         if (!text || text.includes('Select a week') || text.includes('No nominations')) {
-            showToast('Generate a newsletter first', 'error');
-            return;
+            showToast('Generate a newsletter first', 'error'); return;
         }
-
         const weekKey = document.getElementById('newsletter-week').value;
         const weekRange = getWeekRange(new Date(weekKey));
         const subject = encodeURIComponent(`🏆 JWO Team Recognition - Week of ${weekRange.label}`);
         const body = encodeURIComponent(text);
-
         window.location.href = `mailto:?subject=${subject}&body=${body}`;
         showToast('✉️ Opening Outlook...');
     }
@@ -659,11 +536,10 @@ class App {
                 valueId: this.selectedValue,
                 savedAt: new Date().toISOString()
             };
-            // Only save if there's meaningful content
             if (draft.nominee || draft.reason) {
                 localStorage.setItem('jwo_draft', JSON.stringify(draft));
             }
-        }, 1000); // Save 1 second after last keystroke
+        }, 1000);
     }
 
     checkDraft() {
@@ -704,16 +580,12 @@ class App {
     // ===== Weekly Reminder =====
     checkReminder() {
         const today = new Date();
-        const dayOfWeek = today.getDay(); // 0=Sun, 4=Thu, 5=Fri
-
-        // Show reminder on Thursday (4) or Friday (5)
+        const dayOfWeek = today.getDay();
         if (dayOfWeek >= 4 || dayOfWeek === 0) {
-            // Check if user has nominated this week
             const nominations = this.store.getNominations();
             const week = getWeekRange();
             const weekNoms = getNominationsForWeek(nominations, week.start);
             const userNominated = weekNoms.some(n => n.nominator === this.currentUser);
-
             if (!userNominated) {
                 document.getElementById('reminder-banner').classList.remove('hidden');
             }
@@ -724,15 +596,12 @@ class App {
     renderQuarterlyOptions() {
         const select = document.getElementById('quarterly-select');
         const quarters = this.getAvailableQuarters();
-        select.innerHTML = quarters.map(q => `
-            <option value="${q.key}">${q.label}</option>
-        `).join('');
+        select.innerHTML = quarters.map(q => `<option value="${q.key}">${q.label}</option>`).join('');
     }
 
     getAvailableQuarters() {
         const quarters = [];
         const now = new Date();
-        // Generate last 4 quarters
         for (let i = 0; i < 4; i++) {
             const date = new Date(now.getFullYear(), now.getMonth() - (i * 3), 1);
             const q = Math.floor(date.getMonth() / 3) + 1;
@@ -743,8 +612,7 @@ class App {
             quarters.push({
                 key: `${year}-Q${q}`,
                 label: `Q${q} ${year} (${start.toLocaleDateString('en-US', { month: 'short' })} - ${end.toLocaleDateString('en-US', { month: 'short' })})`,
-                start,
-                end
+                start, end
             });
         }
         return quarters;
@@ -753,7 +621,6 @@ class App {
     generateQuarterly() {
         const quarterKey = document.getElementById('quarterly-select').value;
         if (!quarterKey) return;
-
         const quarters = this.getAvailableQuarters();
         const quarter = quarters.find(q => q.key === quarterKey);
         if (!quarter) return;
@@ -770,43 +637,29 @@ class App {
             return;
         }
 
-        // Calculate stats
         const uniqueNominees = [...new Set(nominations.map(n => n.nominee))];
         const uniqueNominators = [...new Set(nominations.map(n => n.nominator))];
-
-        // Behavior counts
         const behaviorCounts = {};
-        nominations.forEach(n => {
-            behaviorCounts[n.value] = (behaviorCounts[n.value] || 0) + 1;
-        });
+        nominations.forEach(n => { behaviorCounts[n.value] = (behaviorCounts[n.value] || 0) + 1; });
         const topBehavior = Object.entries(behaviorCounts).sort((a, b) => b[1] - a[1])[0];
-
-        // Nominee counts
         const nomineeCounts = {};
-        nominations.forEach(n => {
-            nomineeCounts[n.nominee] = (nomineeCounts[n.nominee] || 0) + 1;
-        });
+        nominations.forEach(n => { nomineeCounts[n.nominee] = (nomineeCounts[n.nominee] || 0) + 1; });
         const sortedNominees = Object.entries(nomineeCounts).sort((a, b) => b[1] - a[1]);
 
-        // Update stat cards
         document.getElementById('stat-total').textContent = nominations.length;
         document.getElementById('stat-nominees').textContent = uniqueNominees.length;
         document.getElementById('stat-nominators').textContent = uniqueNominators.length;
         document.getElementById('stat-top-behavior').textContent = topBehavior ? topBehavior[0].split(' ').slice(0, 2).join(' ') : '-';
 
-        // Top nominees
-        const topNomineesEl = document.getElementById('quarterly-top-nominees');
-        topNomineesEl.innerHTML = sortedNominees.slice(0, 10).map(([name, count]) => `
+        document.getElementById('quarterly-top-nominees').innerHTML = sortedNominees.slice(0, 10).map(([name, count]) => `
             <div class="quarterly-nominee-item">
                 <span>⭐ ${name}</span>
                 <span class="quarterly-nominee-count">${count} nomination${count > 1 ? 's' : ''}</span>
             </div>
         `).join('');
 
-        // Behavior breakdown
         const maxCount = Math.max(...Object.values(behaviorCounts));
-        const breakdownEl = document.getElementById('quarterly-behavior-breakdown');
-        breakdownEl.innerHTML = Object.entries(behaviorCounts)
+        document.getElementById('quarterly-behavior-breakdown').innerHTML = Object.entries(behaviorCounts)
             .sort((a, b) => b[1] - a[1])
             .map(([behavior, count]) => `
                 <div class="quarterly-bar">
@@ -818,16 +671,13 @@ class App {
                 </div>
             `).join('');
 
-        // Week-by-week
-        const weeklyEl = document.getElementById('quarterly-weekly-breakdown');
         const weeklyData = new Map();
         nominations.forEach(n => {
             const week = getWeekRange(new Date(n.timestamp));
-            const key = week.label;
-            weeklyData.set(key, (weeklyData.get(key) || 0) + 1);
+            weeklyData.set(week.label, (weeklyData.get(week.label) || 0) + 1);
         });
         const maxWeekly = Math.max(...weeklyData.values());
-        weeklyEl.innerHTML = Array.from(weeklyData.entries()).map(([week, count]) => `
+        document.getElementById('quarterly-weekly-breakdown').innerHTML = Array.from(weeklyData.entries()).map(([week, count]) => `
             <div class="quarterly-bar">
                 <span class="quarterly-bar-label">${week}</span>
                 <div class="quarterly-bar-track">
@@ -839,48 +689,30 @@ class App {
 
         document.getElementById('quarterly-stats').classList.remove('hidden');
 
-        // Build text version for copying
-        let text = `📊 JWO QUARTERLY RECOGNITION SUMMARY\n`;
-        text += `${quarter.label}\n`;
+        // Build text version
+        let text = `📊 JWO QUARTERLY RECOGNITION SUMMARY\n${quarter.label}\n`;
         text += '══════════════════════════════════════════════════════\n\n';
-        text += `Total Nominations: ${nominations.length}\n`;
-        text += `Unique Nominees: ${uniqueNominees.length}\n`;
-        text += `Nominators: ${uniqueNominators.length}\n\n`;
+        text += `Total Nominations: ${nominations.length}\nUnique Nominees: ${uniqueNominees.length}\nNominators: ${uniqueNominators.length}\n\n`;
         text += `🏅 MOST RECOGNIZED:\n`;
-        sortedNominees.slice(0, 5).forEach(([name, count], i) => {
-            text += `   ${i + 1}. ${name} (${count} nominations)\n`;
-        });
+        sortedNominees.slice(0, 5).forEach(([name, count], i) => { text += `   ${i + 1}. ${name} (${count})\n`; });
         text += `\n📈 BEHAVIOR BREAKDOWN:\n`;
-        Object.entries(behaviorCounts).sort((a, b) => b[1] - a[1]).forEach(([behavior, count]) => {
-            text += `   • ${behavior}: ${count}\n`;
-        });
+        Object.entries(behaviorCounts).sort((a, b) => b[1] - a[1]).forEach(([b, c]) => { text += `   • ${b}: ${c}\n`; });
         text += '\n— JWO Leadership Team 🚀\n';
-
         document.getElementById('quarterly-preview').textContent = text;
         document.getElementById('quarterly-preview').classList.remove('hidden');
     }
 
     copyQuarterly() {
-        const preview = document.getElementById('quarterly-preview');
-        const text = preview.textContent;
-
-        if (!text) {
-            showToast('Generate a summary first', 'error');
-            return;
-        }
-
-        navigator.clipboard.writeText(text).then(() => {
-            showToast('📋 Quarterly summary copied!');
-        }).catch(() => {
-            showToast('Could not copy', 'error');
-        });
+        const text = document.getElementById('quarterly-preview').textContent;
+        if (!text) { showToast('Generate a summary first', 'error'); return; }
+        navigator.clipboard.writeText(text).then(() => showToast('📋 Quarterly summary copied!'))
+            .catch(() => showToast('Could not copy', 'error'));
     }
 
     // ===== Archive =====
     switchArchiveTab(tab) {
         document.querySelectorAll('.archive-tab-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.archive-content').forEach(c => c.classList.remove('active'));
-
         document.querySelector(`[data-archive="${tab}"]`).classList.add('active');
         document.getElementById(`archive-${tab}`).classList.add('active');
     }
@@ -892,29 +724,21 @@ class App {
 
     renderArchiveNominations() {
         const container = document.getElementById('archive-nominations');
-        const nominations = this.store.getNominations().sort((a, b) =>
-            new Date(b.timestamp) - new Date(a.timestamp)
-        );
-
+        const nominations = this.store.getNominations().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         if (nominations.length === 0) {
             container.innerHTML = '<div class="empty-state"><div class="empty-icon">🌟</div><p>No nominations yet.</p></div>';
             return;
         }
-
         container.innerHTML = nominations.map(n => this.renderNominationCard(n)).join('');
     }
 
     renderArchiveNewsletters() {
         const container = document.getElementById('archive-newsletters');
-        const newsletters = this.store.getNewsletters().sort((a, b) =>
-            new Date(b.savedAt) - new Date(a.savedAt)
-        );
-
+        const newsletters = this.store.getNewsletters().sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
         if (newsletters.length === 0) {
             container.innerHTML = '<div class="empty-state"><div class="empty-icon">📰</div><p>No saved newsletters yet.</p></div>';
             return;
         }
-
         container.innerHTML = newsletters.map(nl => `
             <div class="newsletter-archive-card" data-nl-id="${nl.id}">
                 <h4>📰 Week of ${nl.weekLabel}</h4>
@@ -922,11 +746,9 @@ class App {
                 <div class="newsletter-expanded hidden">${nl.content}</div>
             </div>
         `).join('');
-
         container.querySelectorAll('.newsletter-archive-card').forEach(card => {
             card.addEventListener('click', () => {
-                const expanded = card.querySelector('.newsletter-expanded');
-                expanded.classList.toggle('hidden');
+                card.querySelector('.newsletter-expanded').classList.toggle('hidden');
             });
         });
     }
@@ -940,18 +762,14 @@ class App {
     renderValuesList() {
         const container = document.getElementById('values-list');
         const values = this.store.getValues();
-
         container.innerHTML = values.map(v => `
             <div class="value-setting-item">
                 <span>${v.emoji} ${v.name}</span>
                 <button class="btn btn-danger btn-small" data-remove-value="${v.id}">Remove</button>
             </div>
         `).join('');
-
         container.querySelectorAll('[data-remove-value]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                this.removeValue(btn.dataset.removeValue);
-            });
+            btn.addEventListener('click', () => this.removeValue(btn.dataset.removeValue));
         });
     }
 
@@ -960,19 +778,11 @@ class App {
         const emojiInput = document.getElementById('new-value-emoji');
         const name = nameInput.value.trim();
         const emoji = emojiInput.value.trim() || '⭐';
-
-        if (!name) {
-            showToast('Please enter a behavior name', 'error');
-            return;
-        }
-
+        if (!name) { showToast('Please enter a behavior name', 'error'); return; }
         const values = this.store.getValues();
-        const id = name.toLowerCase().replace(/\s+/g, '-');
-        values.push({ id, name, emoji });
+        values.push({ id: name.toLowerCase().replace(/\s+/g, '-'), name, emoji });
         this.store.setValues(values);
-
-        nameInput.value = '';
-        emojiInput.value = '';
+        nameInput.value = ''; emojiInput.value = '';
         this.renderValuesList();
         this.renderValues();
         showToast('✨ Behavior added!');
@@ -988,39 +798,31 @@ class App {
 
     copyShareLink() {
         const link = document.getElementById('share-link').value;
-        navigator.clipboard.writeText(link).then(() => {
-            showToast('🔗 Link copied! Share with your team.');
-        }).catch(() => {
-            showToast('Could not copy link', 'error');
-        });
+        navigator.clipboard.writeText(link).then(() => showToast('🔗 Link copied! Share with your team.'))
+            .catch(() => showToast('Could not copy link', 'error'));
     }
 
     exportData() {
         const data = this.store.exportAll();
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
+        const a = document.createElement('a'); a.href = url;
         a.download = `jwo-recognition-backup-${new Date().toISOString().split('T')[0]}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
+        a.click(); URL.revokeObjectURL(url);
         showToast('📦 Data exported!');
     }
 
-    importData(event) {
+    async importData(event) {
         const file = event.target.files[0];
         if (!file) return;
-
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = async (e) => {
             try {
                 const data = JSON.parse(e.target.result);
-                this.store.importAll(data);
+                await this.store.importAll(data);
                 this.showApp();
                 showToast('✅ Data imported successfully!');
-            } catch (err) {
-                showToast('Invalid file format', 'error');
-            }
+            } catch (err) { showToast('Invalid file format', 'error'); }
         };
         reader.readAsText(file);
         event.target.value = '';
@@ -1028,6 +830,4 @@ class App {
 }
 
 // ===== Initialize =====
-document.addEventListener('DOMContentLoaded', () => {
-    new App();
-});
+document.addEventListener('DOMContentLoaded', () => { new App(); });
