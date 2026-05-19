@@ -1,7 +1,7 @@
 // ===== JWO Team Recognition App =====
 // Supabase Backend
 
-const SUPABASE_URL = 'https://gmpqnvfcjbskqsfbwaa.supabase.co';
+const SUPABASE_URL = 'https://gmqonvflcjbskqsfbwas.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtcW9udmZsY2pic2txc2Zid2FzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyMjQzODIsImV4cCI6MjA5NDgwMDM4Mn0.bhEaxiqpIf9hqTR7C0OglVSoPrN6WLg5RLZA7DFO6IA';
 
 // Default team behaviors
