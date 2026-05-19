@@ -54,7 +54,10 @@ class DataStore {
 
     setValues(values) {
         this.data.values = values;
-        this.save();
+        this.load().then(() => {
+            this.data.values = values;
+            this.save();
+        });
     }
 
     getNominations() {
@@ -62,6 +65,8 @@ class DataStore {
     }
 
     async addNomination(nomination) {
+        // Always fetch latest data before adding to prevent overwrites
+        await this.load();
         nomination.id = Date.now().toString();
         nomination.timestamp = new Date().toISOString();
         this.data.nominations.push(nomination);
@@ -70,6 +75,7 @@ class DataStore {
     }
 
     async deleteNomination(id) {
+        await this.load();
         this.data.nominations = this.data.nominations.filter(n => n.id !== id);
         await this.save();
     }
@@ -79,6 +85,7 @@ class DataStore {
     }
 
     async addNewsletter(newsletter) {
+        await this.load();
         newsletter.id = Date.now().toString();
         newsletter.savedAt = new Date().toISOString();
         this.data.newsletters.push(newsletter);
