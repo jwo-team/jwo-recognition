@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JWO Team Recognition</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Amazon+Ember:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Fireworks Canvas -->
+    <canvas id="fireworks-canvas"></canvas>
+
+    <!-- Login Screen -->
+    <div id="login-screen" class="login-screen">
+        <div class="login-container">
+            <div class="login-logo">
+                <img src="https://a0.awsstatic.com/libra-css/images/logos/aws_smile-header-desktop-en-white_59x35.png" alt="AWS" class="aws-logo">
+                <h1 class="brand-title">Amazon <span class="brand-highlight">Just Walk Out</span></h1>
+                <p class="brand-subtitle">Team Recognition</p>
+            </div>
+            <form id="login-form" class="login-form">
+                <div class="form-group">
+                    <label for="login-name">Your Name</label>
+                    <input type="text" id="login-name" placeholder="Enter your full name" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-full">Enter</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="app" class="app hidden">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <img src="https://a0.awsstatic.com/libra-css/images/logos/aws_smile-header-desktop-en-white_59x35.png" alt="AWS" class="aws-logo-small">
+                <span class="header-title">Just Walk Out <span class="header-highlight">Recognition</span></span>
+            </div>
+            <nav class="header-nav">
+                <button class="nav-btn active" data-tab="nominate">✨ Nominate</button>
+                <button class="nav-btn" data-tab="current-week">📋 This Week</button>
+                <button class="nav-btn" data-tab="newsletter">📰 Newsletter</button>
+                <button class="nav-btn" data-tab="quarterly">📊 Quarterly</button>
+                <button class="nav-btn" data-tab="archive">📁 Archive</button>
+                <button class="nav-btn" data-tab="settings">⚙️ Settings</button>
+            </nav>
+            <div class="header-right">
+                <span class="user-name" id="current-user"></span>
+                <button class="btn btn-small btn-outline" id="logout-btn">Sign Out</button>
+            </div>
+        </header>
+
+        <!-- Nominate Tab -->
+        <section id="tab-nominate" class="tab-content active">
+            <div class="container">
+                <!-- Weekly Reminder Banner -->
+                <div id="reminder-banner" class="reminder-banner hidden">
+                    <span>⏰</span>
+                    <p>It's late in the week — have you submitted a nomination yet?</p>
+                </div>
+                <!-- Draft Banner -->
+                <div id="draft-banner" class="draft-banner hidden">
+                    <span>📝</span>
+                    <p>You have a saved draft. <button class="btn-link" id="restore-draft-btn">Restore it</button> or <button class="btn-link" id="discard-draft-btn">discard</button></p>
+                </div>
+                <div class="section-header">
+                    <h2>✨ Recognize a Team Member</h2>
+                    <p>Celebrate someone who's living our team behaviors this week</p>
+                </div>
+                <form id="nomination-form" class="nomination-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="nominee-name">Who are you recognizing?</label>
+                            <input type="text" id="nominee-name" placeholder="Team member's name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="nominator-name">Your Name</label>
+                            <input type="text" id="nominator-name" placeholder="Your name" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Which behavior did they demonstrate?</label>
+                        <div class="values-grid" id="values-grid">
+                            <!-- Values populated by JS -->
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="nomination-reason">Tell us what happened!</label>
+                        <textarea id="nomination-reason" rows="4" placeholder="Describe the specific behavior or achievement..." required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="nomination-impact">Impact on the Team (optional)</label>
+                        <textarea id="nomination-impact" rows="2" placeholder="How did this positively impact the team or project?"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-submit">🎉 Submit Nomination</button>
+                </form>
+                <div id="nomination-success" class="success-message hidden">
+                    <div class="success-icon">🎉</div>
+                    <h3>Nomination Submitted!</h3>
+                    <p>Thank you for celebrating your teammate!</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Current Week Tab -->
+        <section id="tab-current-week" class="tab-content">
+            <div class="container">
+                <div class="section-header">
+                    <h2>📋 This Week's Nominations</h2>
+                    <p id="current-week-range"></p>
+                </div>
+                <div id="current-nominations" class="nominations-list">
+                </div>
+                <div id="no-nominations" class="empty-state hidden">
+                    <div class="empty-icon">🌟</div>
+                    <p>No nominations yet this week. Be the first to recognize a teammate!</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Newsletter Tab -->
+        <section id="tab-newsletter" class="tab-content">
+            <div class="container">
+                <div class="section-header">
+                    <h2>📰 Weekly Newsletter</h2>
+                    <p>Generate and copy the newsletter to paste into Outlook</p>
+                </div>
+                <div class="newsletter-controls">
+                    <div class="form-group">
+                        <label for="newsletter-week">Select Week</label>
+                        <select id="newsletter-week"></select>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" id="generate-newsletter">Generate</button>
+                        <button class="btn btn-secondary" id="copy-newsletter">📋 Copy to Clipboard</button>
+                        <button class="btn btn-secondary" id="save-newsletter">💾 Save to Archive</button>
+                        <button class="btn btn-primary" id="send-newsletter">✉️ Send via Outlook</button>
+                    </div>
+                </div>
+                <div id="newsletter-preview" class="newsletter-preview">
+                    <p class="empty-state">Select a week and click "Generate" to preview</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Quarterly Summary Tab -->
+        <section id="tab-quarterly" class="tab-content">
+            <div class="container">
+                <div class="section-header">
+                    <h2>📊 Quarterly Summary</h2>
+                    <p>Overview of nominations and trends across the quarter</p>
+                </div>
+                <div class="newsletter-controls">
+                    <div class="form-group">
+                        <label for="quarterly-select">Select Quarter</label>
+                        <select id="quarterly-select"></select>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" id="generate-quarterly">Generate Summary</button>
+                        <button class="btn btn-secondary" id="copy-quarterly">📋 Copy</button>
+                    </div>
+                </div>
+                <div id="quarterly-stats" class="quarterly-stats hidden">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-number" id="stat-total">0</div>
+                            <div class="stat-label">Total Nominations</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="stat-nominees">0</div>
+                            <div class="stat-label">Unique Nominees</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="stat-nominators">0</div>
+                            <div class="stat-label">Nominators</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="stat-top-behavior">-</div>
+                            <div class="stat-label">Top Behavior</div>
+                        </div>
+                    </div>
+                    <div class="quarterly-section">
+                        <h3>🏅 Most Recognized</h3>
+                        <div id="quarterly-top-nominees"></div>
+                    </div>
+                    <div class="quarterly-section">
+                        <h3>📈 Behavior Breakdown</h3>
+                        <div id="quarterly-behavior-breakdown"></div>
+                    </div>
+                    <div class="quarterly-section">
+                        <h3>📅 Week-by-Week</h3>
+                        <div id="quarterly-weekly-breakdown"></div>
+                    </div>
+                </div>
+                <div id="quarterly-preview" class="newsletter-preview hidden"></div>
+            </div>
+        </section>
+
+        <!-- Archive Tab -->
+        <section id="tab-archive" class="tab-content">
+            <div class="container">
+                <div class="section-header">
+                    <h2>📁 Archive</h2>
+                    <p>Past nominations and newsletters</p>
+                </div>
+                <div class="archive-tabs">
+                    <button class="archive-tab-btn active" data-archive="nominations">All Nominations</button>
+                    <button class="archive-tab-btn" data-archive="newsletters">Saved Newsletters</button>
+                </div>
+                <div id="archive-nominations" class="archive-content active">
+                </div>
+                <div id="archive-newsletters" class="archive-content">
+                </div>
+            </div>
+        </section>
+
+        <!-- Settings Tab -->
+        <section id="tab-settings" class="tab-content">
+            <div class="container">
+                <div class="section-header">
+                    <h2>⚙️ Settings</h2>
+                    <p>Manage behaviors and sharing</p>
+                </div>
+                <div class="settings-grid">
+                    <div class="settings-card">
+                        <h3>Team Behaviors</h3>
+                        <p>Customize the behaviors your team recognizes</p>
+                        <div id="values-list" class="values-settings-list">
+                        </div>
+                        <div class="form-row compact">
+                            <input type="text" id="new-value-name" placeholder="Behavior name">
+                            <input type="text" id="new-value-emoji" placeholder="Emoji" maxlength="4">
+                            <button class="btn btn-small btn-primary" id="add-value-btn">Add</button>
+                        </div>
+                    </div>
+                    <div class="settings-card">
+                        <h3>Shareable Link</h3>
+                        <p>Share this link with your team for easy access</p>
+                        <div class="input-with-btn">
+                            <input type="text" id="share-link" readonly>
+                            <button class="btn btn-small btn-primary" id="copy-link-btn">Copy</button>
+                        </div>
+                        <p class="hint">Anyone with this link can use the app</p>
+                    </div>
+                    <div class="settings-card">
+                        <h3>Data Management</h3>
+                        <p>Export or import nomination data</p>
+                        <div class="btn-group">
+                            <button class="btn btn-small btn-secondary" id="export-data-btn">Export Data</button>
+                            <label class="btn btn-small btn-outline" for="import-data-input">Import Data</label>
+                            <input type="file" id="import-data-input" accept=".json" class="hidden">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
